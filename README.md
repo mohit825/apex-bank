@@ -34,6 +34,22 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 Keep `.env.local` out of Git. The database client is for Node.js server code only; any future route that imports it must use the Node.js runtime, not the Edge runtime.
 
+## Authentication setup
+
+Apply the checked-in users migration to your Neon development branch with `npm run db:migrate`. This does not run automatically during a build, and the existing rate plans are preserved. Apply the same migration separately to the production branch before using registration there.
+
+Generate a distinct random signing secret for each environment:
+
+```bash
+openssl rand -base64 32
+```
+
+Set the output as `JWT_SECRET` in your ignored `.env.local` and in Vercel's Production environment variables. Keep it private and use a separate value for Preview deployments. Changing it invalidates existing JWT sessions. The application requires at least 32 bytes and signs sessions for two hours.
+
+`/register` validates and hashes passwords on the server, then creates a CUSTOMER. `/login` is a disabled form scaffold for the login Server Action. The session helpers in `src/lib/session.ts` are for use only after credentials have been verified. `/dashboard` verifies the cookie and reloads the current user from the database. Every future Server Action must validate its input and check authentication and authorization as appropriate.
+
+Deleting the session cookie during logout removes it from that browser, but it cannot revoke a JWT that was already copied. Server-side token revocation is outside this ticket.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

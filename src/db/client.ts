@@ -8,7 +8,9 @@ import * as schema from "./schema";
 const connectionString = process.env.DATABASE_URL;
 
 if (!connectionString) {
-  throw new Error("DATABASE_URL must be set to the pooled Neon connection string.");
+  throw new Error(
+    "DATABASE_URL must be set to the pooled Neon connection string.",
+  );
 }
 
 const pool = new Pool({
@@ -19,8 +21,11 @@ const pool = new Pool({
   allowExitOnIdle: true,
 });
 
-pool.on("error", (error) => {
-  console.error("Unexpected error on an idle PostgreSQL client:", error);
+pool.on("error", () => {
+  console.error("Unexpected error on an idle PostgreSQL client.");
 });
 
-export const db = drizzle({ client: pool, schema });
+export const db = drizzle({
+  client: pool,
+  schema,
+});
