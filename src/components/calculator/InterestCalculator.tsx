@@ -1,6 +1,13 @@
 "use client";
 import { useState } from "react";
 
+const currencyFormatter = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
 export default function InterestCalculator() {
   const [principalAmount, setPrincipalAmount] = useState<string>("10000");
   const [rate, setRate] = useState<string>("5");
@@ -37,6 +44,14 @@ export default function InterestCalculator() {
   const calculationError =
     hasValidInputs && !hasValidResults
       ? "These values are too large to calculate."
+      : null;
+  const formattedInterest =
+    hasValidResults && calculatedInterest !== null
+      ? currencyFormatter.format(calculatedInterest)
+      : null;
+  const formattedMaturity =
+    hasValidResults && maturityAmount !== null
+      ? currencyFormatter.format(maturityAmount)
       : null;
 
   return (
@@ -162,10 +177,10 @@ export default function InterestCalculator() {
             <dd className="mt-2 text-xl font-semibold text-slate-900">
               <output htmlFor="principal-amount annual-interest-rate time-period-years">
                 <span aria-hidden="true">
-                  {hasValidResults ? calculatedInterest : "—"}
+                  {formattedInterest ?? "—"}
                 </span>
                 <span className="sr-only">
-                  {hasValidResults ? calculatedInterest : "No result available"}
+                  {formattedInterest ?? "No result available"}
                 </span>
               </output>
             </dd>
@@ -177,10 +192,10 @@ export default function InterestCalculator() {
             <dd className="mt-2 text-xl font-semibold text-slate-900">
               <output htmlFor="principal-amount annual-interest-rate time-period-years">
                 <span aria-hidden="true">
-                  {hasValidResults ? maturityAmount : "—"}
+                  {formattedMaturity ?? "—"}
                 </span>
                 <span className="sr-only">
-                  {hasValidResults ? maturityAmount : "No result available"}
+                  {formattedMaturity ?? "No result available"}
                 </span>
               </output>
             </dd>
