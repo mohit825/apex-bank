@@ -91,7 +91,7 @@ export async function readSession(): Promise<{
   }
 }
 
-/** Call from a future logout Server Action to expire the browser cookie. */
+/** Expire the browser cookie; this does not revoke a copied JWT. */
 export async function deleteSession() {
   (await cookies()).set(COOKIE_NAME, "", {
     httpOnly: true,
