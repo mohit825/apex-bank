@@ -47,6 +47,14 @@ export default async function DashboardPage() {
         <p className="mt-4 leading-7 text-slate-600">
           Your session is verified. You are signed in as {user.email}.
         </p>
+        {user.role === "ADMIN" && (
+          <Link
+            href="/admin"
+            className="mt-6 inline-flex rounded-full bg-blue-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+          >
+            Admin
+          </Link>
+        )}
       </section>
     </main>
   );
