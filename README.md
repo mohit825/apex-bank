@@ -46,7 +46,15 @@ openssl rand -base64 32
 
 Set the output as `JWT_SECRET` in your ignored `.env.local` and in Vercel's Production environment variables. Keep it private and use a separate value for Preview deployments. Changing it invalidates existing JWT sessions. The application requires at least 32 bytes and signs sessions for two hours.
 
-`/register` validates and hashes passwords on the server, then creates a CUSTOMER. `/login` is a disabled form scaffold for the login Server Action. The session helpers in `src/lib/session.ts` are for use only after credentials have been verified. `/dashboard` verifies the cookie and reloads the current user from the database. Every future Server Action must validate its input and check authentication and authorization as appropriate.
+`/register` validates and hashes passwords on the server, then creates a CUSTOMER. `/login` verifies credentials and creates a session. The session helpers in `src/lib/session.ts` are for use only after credentials have been verified. `/dashboard` verifies the cookie and reloads the current user from the database. Every future Server Action must validate its input and check authentication and authorization as appropriate.
+
+To create the first administrator manually, set `ADMIN_SEED_EMAIL` and `ADMIN_SEED_PASSWORD` in your ignored `.env.local`. Use a new email, a unique password of at least 12 characters and at most 72 UTF-8 bytes, and confirm `DATABASE_MIGRATION_URL` points to the intended Neon branch. Then run:
+
+```bash
+npm run db:seed:admin
+```
+
+The command uses the direct migration URL and does not run during builds or migrations. Re-running it leaves an existing ADMIN's password unchanged. If the email belongs to a CUSTOMER, it fails without changing that user. Keep administrator credentials out of Git and use a separate admin identity for each environment.
 
 Deleting the session cookie during logout removes it from that browser, but it cannot revoke a JWT that was already copied. Server-side token revocation is outside this ticket.
 

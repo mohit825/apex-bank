@@ -1,0 +1,214 @@
+diff --git a/.env.example b/.env.example
+index 9c1aa45..3b1966c 100644
+--- a/.env.example
++++ b/.env.example
+@@ -1,12 +1,12 @@
++# Pooled Neon PostgreSQL URL for application queries
++DATABASE_URL=postgresql://USER:PASSWORD@POOLED_HOST/DATABASE?sslmode=require
+ 
++# Direct Neon PostgreSQL URL for manual migrations and seed scripts
++DATABASE_MIGRATION_URL=postgresql://USER:PASSWORD@DIRECT_HOST/DATABASE?sslmode=require
+ 
+-# keep Neon credentials secure: do not expose them to client-side code
+-
+-DATABASE_URL='postgresql://neondb_owner:npg_2Utbaxuh5zoS@ep-royal-feather-azzlxe31-pooler.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
+-
+-# keep Neon credentials secure: do not expose them to client-side code
+-
+-DATABASE_MIGRATION_URL='postgresql://neondb_owner:npg_2Utbaxuh5zoS@ep-royal-feather-azzlxe31.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
+-
+-# Generate a new value with: openssl rand -base64 32
++# Generate a random value with: openssl rand -base64 32
+ JWT_SECRET=replace-me
++
++# Used only by: npm run db:seed:admin
++ADMIN_SEED_EMAIL=replace-me
++ADMIN_SEED_PASSWORD=replace-me
+diff --git a/README.md b/README.md
+index e66ed94..5ca1c35 100644
+--- a/README.md
++++ b/README.md
+@@ -46,7 +46,15 @@ openssl rand -base64 32
+ 
+ Set the output as `JWT_SECRET` in your ignored `.env.local` and in Vercel's Production environment variables. Keep it private and use a separate value for Preview deployments. Changing it invalidates existing JWT sessions. The application requires at least 32 bytes and signs sessions for two hours.
+ 
+-`/register` validates and hashes passwords on the server, then creates a CUSTOMER. `/login` is a disabled form scaffold for the login Server Action. The session helpers in `src/lib/session.ts` are for use only after credentials have been verified. `/dashboard` verifies the cookie and reloads the current user from the database. Every future Server Action must validate its input and check authentication and authorization as appropriate.
++`/register` validates and hashes passwords on the server, then creates a CUSTOMER. `/login` verifies credentials and creates a session. The session helpers in `src/lib/session.ts` are for use only after credentials have been verified. `/dashboard` verifies the cookie and reloads the current user from the database. Every future Server Action must validate its input and check authentication and authorization as appropriate.
++
++To create the first administrator manually, set `ADMIN_SEED_EMAIL` and `ADMIN_SEED_PASSWORD` in your ignored `.env.local`. Use a new email, a unique password of at least 12 characters and at most 72 UTF-8 bytes, and confirm `DATABASE_MIGRATION_URL` points to the intended Neon branch. Then run:
++
++```bash
++npm run db:seed:admin
++```
++
++The command uses the direct migration URL and does not run during builds or migrations. Re-running it leaves an existing ADMIN's password unchanged. If the email belongs to a CUSTOMER, it fails without changing that user. Keep administrator credentials out of Git and use a separate admin identity for each environment.
+ 
+ Deleting the session cookie during logout removes it from that browser, but it cannot revoke a JWT that was already copied. Server-side token revocation is outside this ticket.
+ 
+diff --git a/package.json b/package.json
+index 26de6ce..f2bfe7b 100644
+--- a/package.json
++++ b/package.json
+@@ -9,7 +9,8 @@
+     "lint": "eslint",
+     "db:generate": "drizzle-kit generate",
+     "db:migrate": "drizzle-kit migrate",
+-    "db:seed": "tsx scripts/seed.ts"
++    "db:seed": "tsx scripts/seed.ts",
++    "db:seed:admin": "tsx scripts/seed-admin.ts"
+   },
+   "dependencies": {
+     "bcryptjs": "3.0.3",
+diff --git a/src/app/dashboard/page.tsx b/src/app/dashboard/page.tsx
+index d0fe06e..e244713 100644
+--- a/src/app/dashboard/page.tsx
++++ b/src/app/dashboard/page.tsx
+@@ -2,7 +2,8 @@ import type { Metadata } from "next";
+ import Link from "next/link";
+ import { redirect } from "next/navigation";
+ 
+-import { deleteSession, getAuthenticatedUser } from "@/lib/session";
++import { requireAuthenticatedUser } from "@/lib/auth/authorization";
++import { deleteSession } from "@/lib/session";
+ 
+ export const runtime = "nodejs";
+ 
+@@ -18,8 +19,7 @@ async function logout() {
+ }
+ 
+ export default async function DashboardPage() {
+-  const user = await getAuthenticatedUser();
+-  if (!user) redirect("/login");
++  const user = await requireAuthenticatedUser();
+ 
+   return (
+     <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col px-6 py-8 sm:px-10 sm:py-10">
+diff --git a/src/lib/session.ts b/src/lib/session.ts
+index 13a4140..88e92e3 100644
+--- a/src/lib/session.ts
++++ b/src/lib/session.ts
+@@ -1,33 +1,23 @@
+ import "server-only";
+ 
+ import { eq } from "drizzle-orm";
+-import { SignJWT, jwtVerify } from "jose";
++import { SignJWT } from "jose";
+ import { cookies } from "next/headers";
+ 
+ import { db } from "@/db/client";
+ import { users } from "@/db/schema";
+-
+-const COOKIE_NAME = "apexbank_session";
+-const SESSION_AGE_SECONDS = 2 * 60 * 60;
+-const ISSUER = "apexbank";
+-const AUDIENCE = "apexbank-web";
+-const ALGORITHM = "HS256";
+-
+-type UserRole = typeof users.$inferSelect.role;
+-
+-function getSecret() {
+-  const secret = process.env.JWT_SECRET;
+-
+-  if (!secret || new TextEncoder().encode(secret).length < 32) {
+-    throw new Error("JWT_SECRET must be a random secret of at least 32 bytes.");
+-  }
+-
+-  return new TextEncoder().encode(secret);
+-}
++import {
++  getJwtSecret,
++  SESSION_ALGORITHM,
++  SESSION_AUDIENCE,
++  SESSION_COOKIE_NAME,
++  SESSION_ISSUER,
++  SESSION_MAX_AGE_SECONDS,
++  verifySessionToken,
++} from "@/lib/auth/jwt";
+ 
+ /** Call only after authenticating credentials; the role is loaded from the database. */
+ export async function createSession(userId: string) {
+-  debugger;
+   const [user] = await db
+     .select({ id: users.id, role: users.role })
+     .from(users)
+@@ -39,61 +29,34 @@ export async function createSession(userId: string) {
+   }
+ 
+   const token = await new SignJWT({ role: user.role })
+-    .setProtectedHeader({ alg: ALGORITHM, typ: "JWT" })
++    .setProtectedHeader({ alg: SESSION_ALGORITHM, typ: "JWT" })
+     .setSubject(user.id)
+     .setIssuedAt()
+-    .setIssuer(ISSUER)
+-    .setAudience(AUDIENCE)
+-    .setExpirationTime(SESSION_AGE_SECONDS + "s")
+-    .sign(getSecret());
++    .setIssuer(SESSION_ISSUER)
++    .setAudience(SESSION_AUDIENCE)
++    .setExpirationTime(SESSION_MAX_AGE_SECONDS + "s")
++    .sign(getJwtSecret());
+ 
+-  (await cookies()).set(COOKIE_NAME, token, {
++  (await cookies()).set(SESSION_COOKIE_NAME, token, {
+     httpOnly: true,
+     sameSite: "lax",
+     secure: process.env.NODE_ENV === "production",
+     path: "/",
+-    maxAge: SESSION_AGE_SECONDS,
++    maxAge: SESSION_MAX_AGE_SECONDS,
+   });
+ }
+ 
+ /** Return verified session claims, or null for a missing or invalid cookie. */
+-export async function readSession(): Promise<{
+-  userId: string;
+-  role: UserRole;
+-} | null> {
+-  const token = (await cookies()).get(COOKIE_NAME)?.value;
++export async function readSession() {
++  const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+   if (!token) return null;
+ 
+-  const secret = getSecret();
+-  try {
+-    const { payload } = await jwtVerify(token, secret, {
+-      algorithms: [ALGORITHM],
+-      issuer: ISSUER,
+-      audience: AUDIENCE,
+-      typ: "JWT",
+-      maxTokenAge: SESSION_AGE_SECONDS,
+-      requiredClaims: ["sub", "exp", "iat", "role"],
+-    });
+-
+-    if (
+-      typeof payload.sub !== "string" ||
+-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+-        payload.sub,
+-      ) ||
+-      (payload.role !== "CUSTOMER" && payload.role !== "ADMIN")
+-    ) {
+-      return null;
+-    }
+-
+-    return { userId: payload.sub, role: payload.role };
+-  } catch {
+-    return null;
+-  }
++  return verifySessionToken(token);
+ }
+ 
+ /** Expire the browser cookie; this does not revoke a copied JWT. */
+ export async function deleteSession() {
+-  (await cookies()).set(COOKIE_NAME, "", {
++  (await cookies()).set(SESSION_COOKIE_NAME, "", {
+     httpOnly: true,
+     sameSite: "lax",
+     secure: process.env.NODE_ENV === "production",
+@@ -113,5 +76,6 @@ export async function getAuthenticatedUser() {
+     .where(eq(users.id, session.userId))
+     .limit(1);
+ 
+-  return user?.role === session.role ? user : null;
++  // The current database role is authoritative if the signed JWT role is stale.
++  return user ?? null;
+ }

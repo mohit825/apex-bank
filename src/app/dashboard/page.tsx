@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { deleteSession, getAuthenticatedUser } from "@/lib/session";
+import { requireAuthenticatedUser } from "@/lib/auth/authorization";
+import { deleteSession } from "@/lib/session";
 
 export const runtime = "nodejs";
 
@@ -18,8 +19,7 @@ async function logout() {
 }
 
 export default async function DashboardPage() {
-  const user = await getAuthenticatedUser();
-  if (!user) redirect("/login");
+  const user = await requireAuthenticatedUser();
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col px-6 py-8 sm:px-10 sm:py-10">

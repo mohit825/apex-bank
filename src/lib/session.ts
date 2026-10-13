@@ -1,33 +1,23 @@
 import "server-only";
 
 import { eq } from "drizzle-orm";
-import { SignJWT, jwtVerify } from "jose";
+import { SignJWT } from "jose";
 import { cookies } from "next/headers";
 
 import { db } from "@/db/client";
 import { users } from "@/db/schema";
-
-const COOKIE_NAME = "apexbank_session";
-const SESSION_AGE_SECONDS = 2 * 60 * 60;
-const ISSUER = "apexbank";
-const AUDIENCE = "apexbank-web";
-const ALGORITHM = "HS256";
-
-type UserRole = typeof users.$inferSelect.role;
-
-function getSecret() {
-  const secret = process.env.JWT_SECRET;
-
-  if (!secret || new TextEncoder().encode(secret).length < 32) {
-    throw new Error("JWT_SECRET must be a random secret of at least 32 bytes.");
-  }
-
-  return new TextEncoder().encode(secret);
-}
+import {
+  getJwtSecret,
+  SESSION_ALGORITHM,
+  SESSION_AUDIENCE,
+  SESSION_COOKIE_NAME,
+  SESSION_ISSUER,
+  SESSION_MAX_AGE_SECONDS,
+  verifySessionToken,
+} from "@/lib/auth/jwt";
 
 /** Call only after authenticating credentials; the role is loaded from the database. */
 export async function createSession(userId: string) {
-  debugger;
   const [user] = await db
     .select({ id: users.id, role: users.role })
     .from(users)
@@ -39,61 +29,34 @@ export async function createSession(userId: string) {
   }
 
   const token = await new SignJWT({ role: user.role })
-    .setProtectedHeader({ alg: ALGORITHM, typ: "JWT" })
+    .setProtectedHeader({ alg: SESSION_ALGORITHM, typ: "JWT" })
     .setSubject(user.id)
     .setIssuedAt()
-    .setIssuer(ISSUER)
-    .setAudience(AUDIENCE)
-    .setExpirationTime(SESSION_AGE_SECONDS + "s")
-    .sign(getSecret());
+    .setIssuer(SESSION_ISSUER)
+    .setAudience(SESSION_AUDIENCE)
+    .setExpirationTime(SESSION_MAX_AGE_SECONDS + "s")
+    .sign(getJwtSecret());
 
-  (await cookies()).set(COOKIE_NAME, token, {
+  (await cookies()).set(SESSION_COOKIE_NAME, token, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: SESSION_AGE_SECONDS,
+    maxAge: SESSION_MAX_AGE_SECONDS,
   });
 }
 
 /** Return verified session claims, or null for a missing or invalid cookie. */
-export async function readSession(): Promise<{
-  userId: string;
-  role: UserRole;
-} | null> {
-  const token = (await cookies()).get(COOKIE_NAME)?.value;
+export async function readSession() {
+  const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
   if (!token) return null;
 
-  const secret = getSecret();
-  try {
-    const { payload } = await jwtVerify(token, secret, {
-      algorithms: [ALGORITHM],
-      issuer: ISSUER,
-      audience: AUDIENCE,
-      typ: "JWT",
-      maxTokenAge: SESSION_AGE_SECONDS,
-      requiredClaims: ["sub", "exp", "iat", "role"],
-    });
-
-    if (
-      typeof payload.sub !== "string" ||
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        payload.sub,
-      ) ||
-      (payload.role !== "CUSTOMER" && payload.role !== "ADMIN")
-    ) {
-      return null;
-    }
-
-    return { userId: payload.sub, role: payload.role };
-  } catch {
-    return null;
-  }
+  return verifySessionToken(token);
 }
 
 /** Expire the browser cookie; this does not revoke a copied JWT. */
 export async function deleteSession() {
-  (await cookies()).set(COOKIE_NAME, "", {
+  (await cookies()).set(SESSION_COOKIE_NAME, "", {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -113,5 +76,6 @@ export async function getAuthenticatedUser() {
     .where(eq(users.id, session.userId))
     .limit(1);
 
-  return user?.role === session.role ? user : null;
+  // The current database role is authoritative if the signed JWT role is stale.
+  return user ?? null;
 }
