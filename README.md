@@ -76,7 +76,22 @@ npm run db:seed:dashboard
 
 The script refuses a missing user, an ADMIN, or `NODE_ENV=production`. It creates one sample account, three transactions, and two holdings in a database transaction. Stable sample IDs and transaction references make reruns skip existing rows without resetting balances, passwords, or unrelated records. Verify the URL yourself: the script cannot determine whether a Neon URL belongs to a production branch. Never point this fictional seed at production.
 
-`src/lib/dashboard.ts` contains owner-filtered account and transaction reads. In Ticket 006B, pass `user.id` from `requireAuthenticatedUser()` in the dashboard Server Component, implement the holdings query TODO, and render the dashboard UI. Money is stored in paise as PostgreSQL `bigint` and mapped to JavaScript `bigint`; convert deliberately when formatting for display, rather than using floating point arithmetic for balances.
+`src/lib/dashboard.ts` contains owner-filtered account, transaction, and investment reads. The dashboard passes `user.id` from `requireAuthenticatedUser()` to its Server Components. Money is stored in paise as PostgreSQL `bigint` and mapped to JavaScript `bigint`; formatting avoids floating point conversion.
+
+## Dashboard streaming and simulated market feed
+
+After verifying the session and loading the current user, `/dashboard` renders account, transaction, investment, and market sections under separate React Suspense boundaries. Each async Server Component starts its own data read and has a matching loading skeleton. A ready section can replace its skeleton while another section is still loading. Previously, the page awaited `Promise.all()` for all three financial queries before returning any dashboard section, so the slowest query held back the whole page. We use section-level Suspense instead of `loading.tsx`, which would provide one route-level loading state rather than four independent fallbacks. No browser `useEffect`, public cache, or client-side database request is involved.
+
+The market values are fictional examples, **not live quotes**. Set `MARKET_FEED_MODE` in `.env.local`, restart the development server, sign in, and reload `/dashboard` to try each mode:
+
+| Mode | Expected dashboard behavior |
+| --- | --- |
+| `success` (default) | Simulated equity and bond indices appear after about 120 ms. |
+| `slow` | The market skeleton remains for about 1.6 seconds, then values appear. Financial sections can finish sooner. |
+| `error` | The market section shows “Market data temporarily unavailable.” |
+| `timeout` | The market section shows the same unavailable state after a 2.5-second budget, even though the simulated response would take 5 seconds. |
+
+For example, add `MARKET_FEED_MODE=slow` to `.env.local`, restart with `npm run dev`, and hard-reload the dashboard. The account section may appear while the market skeleton remains visible. Repeat with `error` and `timeout`; account, transaction, and investment sections should still render. The simulator uses an abortable timer, so a timed-out response leaves no longer-running simulated work. Expected feed errors are handled inside the market section and never expose internal error details. Unexpected programming errors are allowed to surface for diagnosis. The market feed is a Server Component with no client-side fetch or real provider; production mode defaults to `success` unless explicitly configured.
 
 ## Learn More
 

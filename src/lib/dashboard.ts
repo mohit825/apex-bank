@@ -37,7 +37,6 @@ export async function getRecentTransactionsForUser(userId: string) {
     .limit(5);
 }
 
-// TODO (Ticket 006B): Query investment_holdings with ownerUserId = userId.
 export async function getInvestmentHoldingsForUser(userId: string) {
   return db
     .select({
