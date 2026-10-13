@@ -58,6 +58,26 @@ The command uses the direct migration URL and does not run during builds or migr
 
 Deleting the session cookie during logout removes it from that browser, but it cannot revoke a JWT that was already copied. Server-side token revocation is outside this ticket.
 
+## Customer dashboard data foundation
+
+The dashboard tables are `accounts`, `account_transactions`, and `investment_holdings`. Apply their checked-in migration manually to the intended Neon branch before using the new queries or seed script:
+
+```bash
+npm run db:migrate
+```
+
+This uses `DATABASE_MIGRATION_URL` from `.env.local`; verify that it points to the intended development branch first. The migration does not run during builds or deployments.
+
+To add fictional data, first register a test CUSTOMER in that development branch. In your ignored `.env.local`, set `DASHBOARD_SEED_CUSTOMER_EMAIL` to that customer's email, `DASHBOARD_SEED_DATABASE_URL` to the **direct connection string for that same development branch**, and `DASHBOARD_SEED_CONFIRM=development`. Then run:
+
+```bash
+npm run db:seed:dashboard
+```
+
+The script refuses a missing user, an ADMIN, or `NODE_ENV=production`. It creates one sample account, three transactions, and two holdings in a database transaction. Stable sample IDs and transaction references make reruns skip existing rows without resetting balances, passwords, or unrelated records. Verify the URL yourself: the script cannot determine whether a Neon URL belongs to a production branch. Never point this fictional seed at production.
+
+`src/lib/dashboard.ts` contains owner-filtered account and transaction reads. In Ticket 006B, pass `user.id` from `requireAuthenticatedUser()` in the dashboard Server Component, implement the holdings query TODO, and render the dashboard UI. Money is stored in paise as PostgreSQL `bigint` and mapped to JavaScript `bigint`; convert deliberately when formatting for display, rather than using floating point arithmetic for balances.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
