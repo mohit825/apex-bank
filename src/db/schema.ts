@@ -92,6 +92,33 @@ export const accountTransactions = pgTable(
   ],
 );
 
+export const wireTransfers = pgTable(
+  "wire_transfers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    customerUserId: uuid("customer_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    sourceAccountId: uuid("source_account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "restrict" }),
+    recipientIdentifier: varchar("recipient_identifier", { length: 100 }).notNull(),
+    amountPaise: bigint("amount_paise", { mode: "bigint" }).notNull(),
+    paymentReference: varchar("payment_reference", { length: 140 }),
+    idempotencyKey: uuid("idempotency_key").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("wire_transfers_customer_idempotency_uq").on(
+      table.customerUserId,
+      table.idempotencyKey,
+    ),
+    check("wire_transfers_amount_paise_positive", sql`${table.amountPaise} > 0`),
+  ],
+);
+
 export const investmentHoldings = pgTable(
   "investment_holdings",
   {

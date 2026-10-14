@@ -22,6 +22,13 @@
       "when": 1791874824701,
       "tag": "0002_mysterious_wild_pack",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791954062637,
+      "tag": "0003_normal_whirlwind",
+      "breakpoints": true
     }
   ]
 }

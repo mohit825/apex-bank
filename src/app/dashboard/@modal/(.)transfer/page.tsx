@@ -1,5 +1,8 @@
+import { randomUUID } from "node:crypto";
+
 import { requireAuthenticatedUser } from "@/lib/auth/authorization";
 import { getAccountSummaryForUser } from "@/lib/dashboard";
+
 import { TransferForm } from "@/components/transfer/TransferForm";
 import { TransferModal } from "@/components/transfer/TransferModal";
 
@@ -14,9 +17,15 @@ export default async function InterceptedTransferPage() {
     maskedIdentifier: account.maskedIdentifier,
   }));
 
+  // Separate intended transfer = separate idempotency key.
+  const initialIdempotencyKey = randomUUID();
+
   return (
     <TransferModal>
-      <TransferForm accounts={accountOptions} />
+      <TransferForm
+        accounts={accountOptions}
+        initialIdempotencyKey={initialIdempotencyKey}
+      />
     </TransferModal>
   );
 }
