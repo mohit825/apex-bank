@@ -2,13 +2,20 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import LoginForm from "@/components/auth/LoginForm";
+import { safePostLoginPath, TRANSFER_RETURN_PATH } from "@/lib/auth/return-path";
 
 export const metadata: Metadata = {
   title: "Sign in | ApexBank",
   description: "Sign in to your ApexBank account.",
 };
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ returnTo?: string | string[] }>;
+}) {
+  const returnTo = safePostLoginPath((await searchParams).returnTo);
+
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col px-6 py-8 sm:px-10 sm:py-10">
       <Link
@@ -23,10 +30,12 @@ export default function LoginPage() {
           Sign in to ApexBank
         </h1>
         <p className="mt-4 text-center leading-7 text-slate-600">
-          Enter your account details below.
+          {returnTo === TRANSFER_RETURN_PATH
+            ? "Sign in to recover your unfinished transfer."
+            : "Enter your account details below."}
         </p>
 
-        <LoginForm />
+        <LoginForm returnTo={returnTo} />
 
         <p className="mt-6 text-center text-sm text-slate-600">
           New to ApexBank?{" "}

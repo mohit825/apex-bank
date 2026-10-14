@@ -6,7 +6,7 @@ import { loginUserAction, type LoginState } from "@/app/login/action";
 
 const initialState: LoginState = {};
 
-export default function LoginForm() {
+export default function LoginForm({ returnTo = "/dashboard" }: { returnTo?: string }) {
   const [state, formAction, pending] = useActionState(
     loginUserAction,
     initialState,
@@ -14,6 +14,7 @@ export default function LoginForm() {
 
   return (
     <form className="mt-8 space-y-5" action={formAction}>
+      <input type="hidden" name="returnTo" value={returnTo} />
       <div>
         <label
           htmlFor="login-email"

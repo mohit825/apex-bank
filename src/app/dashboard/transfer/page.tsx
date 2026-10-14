@@ -34,7 +34,9 @@ export default async function TransferPage() {
 
       <div className="mt-6">
         <TransferForm
+          key={user.id}
           accounts={accountOptions}
+          customerId={user.id}
           initialIdempotencyKey={initialIdempotencyKey}
         />
       </div>

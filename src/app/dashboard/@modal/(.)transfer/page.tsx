@@ -23,7 +23,9 @@ export default async function InterceptedTransferPage() {
   return (
     <TransferModal>
       <TransferForm
+        key={user.id}
         accounts={accountOptions}
+        customerId={user.id}
         initialIdempotencyKey={initialIdempotencyKey}
       />
     </TransferModal>

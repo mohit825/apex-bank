@@ -3,11 +3,11 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 
-import { requireAuthenticatedUser } from "@/lib/auth/authorization";
+import { getAuthenticatedUser } from "@/lib/session";
 import { executeSimulatedTransfer } from "@/lib/transfers";
 
 export type TransferActionState = {
-  status: "idle" | "error" | "success";
+  status: "idle" | "error" | "auth-expired" | "success";
   message: string;
   transferId?: string;
 };
@@ -41,7 +41,12 @@ export async function submitTransfer(
   _previousState: TransferActionState,
   formData: FormData,
 ): Promise<TransferActionState> {
-  const user = await requireAuthenticatedUser();
+  // Proxy may reject an expired POST before this action runs, so the client
+  // also handles that path. This check remains mandatory for direct calls.
+  const user = await getAuthenticatedUser();
+  if (!user) {
+    return { status: "auth-expired", message: "Your session expired. Sign in to continue." };
+  }
   if (user.role !== "CUSTOMER") {
     return { status: "error", message: "Transfers are available to customers only." };
   }
