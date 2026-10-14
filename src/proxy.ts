@@ -26,7 +26,6 @@ export async function proxy(request: NextRequest) {
     });
   }
 
-  // TODO: Your role-based authorization checks
   const isAdminRoute = pathName === "/admin" || pathName.startsWith("/admin/");
   if (session.role !== "ADMIN" && isAdminRoute) {
     return NextResponse.redirect(new URL("/forbidden", request.url));
