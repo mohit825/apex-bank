@@ -41,6 +41,12 @@ export default async function DashboardPage() {
         >
           Home
         </Link>
+        <Link
+          href="/dashboard/transfer"
+          className="inline-flex rounded-lg bg-blue-600 px-5 py-3 font-medium text-white hover:bg-blue-700"
+        >
+          Transfer Money
+        </Link>
         <form action={logout}>
           <button
             type="submit"
